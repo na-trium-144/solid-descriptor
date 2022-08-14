@@ -1,8 +1,9 @@
 Attribute VB_Name = "XMLImport"
 Dim swApp As Object
+
+'xmlからアセンブリ生成
 Sub main()
-'Set swApp = Application.SldWorks
-Set swApp = GetObject(, "Sldworks.Application")
+Set swApp = Application.SldWorks
 
 Dim swMath As IMathUtility
 Set swMath = swApp.GetMathUtility()
@@ -10,6 +11,7 @@ Set swMath = swApp.GetMathUtility()
 Dim OpenFile As Variant
 OpenFile = swApp.ActiveDoc.GetPathName() + ".xml"
 
+'新規アセンブリ
 Dim swTemplate As String
 swTemplate = swApp.GetDocumentTemplate(swDocASSEMBLY, "", 0, 0, 0)
 Dim swModel As ModelDoc2
@@ -27,7 +29,7 @@ Set cpIDReplacement = CreateObject("Scripting.Dictionary")
 
 
 Dim cpNode As IXMLDOMElement
-    
+
 For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
     Dim cpID As String
     Dim cpPath As String
@@ -108,8 +110,9 @@ For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
         Set swEntModel = swEntCp.GetModelDoc2()
         
         Dim SelectState As Boolean
-        SelectState = swEntModel.Extension.SelectByID2("", GetSelTypeString(mtEntType), mtParam(0), mtParam(1), mtParam(2), True, 1, Nothing, 0)
-        If Not SelectState Then MsgBox "selectbyid2 failed"
+        'SelectState = swEntModel.Extension.SelectByID2("", SelType.GetSelTypeString(mtEntType), mtParam(0), mtParam(1), mtParam(2), True, 1, Nothing, 0)
+        SelectState = swEntModel.Extension.SelectByRay(mtParam(0), mtParam(1), mtParam(2), mtParam(3), mtParam(4), mtParam(5), 0.001, mtEntType, True, 1, 0)
+        MsgBox SelectState
     Next
     
     Dim mtData As IMateFeatureData
@@ -156,18 +159,3 @@ For i = LBound(swChildren) To UBound(swChildren)
 Next
     
 End Sub
-
-Function GetSelTypeString(SelType As Integer) As String
-If SelType = swSelEDGES Then
-    GetSelTypeString = "EDGE"
-ElseIf SelType = swSelFACES Then
-    GetSelTypeString = "FACE"
-ElseIf SelType = swSelVERTICES Then
-    GetSelTypeString = "VERTEX"
-ElseIf SelType = swSelDATUMPLANES Then
-    GetSelTypeString = "PLANE"
-Else
-    MsgBox "unsupported type: " & SelType
-End If
-End Function
-
