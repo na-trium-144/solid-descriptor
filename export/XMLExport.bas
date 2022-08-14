@@ -130,6 +130,8 @@ Dim SingleMate As Variant
 Dim swMates As Variant
 swMates = swComponent.GetMates()
 
+If IsEmpty(swMates) Then Exit Sub
+
 For Each SingleMate In swMates
     If TypeOf SingleMate Is SldWorks.Mate2 Then
             
@@ -148,8 +150,8 @@ For Each SingleMate In swMates
     
         Set mtNode = DOMDoc.createNode(NODE_ELEMENT, "mate", "")
         
-        Set mtAttr = mtNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "type", ""))
-        mtAttr.nodeValue = swMate.Type
+        Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
+        mtSubNode.Text = swMate.Type
         
         Dim e As Integer
         For e = 0 To swMate.GetMateEntityCount() - 1
@@ -157,8 +159,8 @@ For Each SingleMate In swMates
             
             Set mtEntNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "entity", ""))
             
-            Set mtAttr = mtEntNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "type", ""))
-            mtAttr.nodeValue = swMateEnt.ReferenceType2
+            Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
+            mtSubNode.Text = swMateEnt.ReferenceType2
             
             Set swRefCp = swMateEnt.ReferenceComponent
             If swRefCp.GetID() = -1 Then GoTo MateSkip

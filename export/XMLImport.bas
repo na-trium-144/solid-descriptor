@@ -15,72 +15,159 @@ swTemplate = swApp.GetDocumentTemplate(swDocASSEMBLY, "", 0, 0, 0)
 Dim swModel As ModelDoc2
 Set swModel = swApp.NewDocument(swTemplate, 0, 0, 0)
 
-Dim AsmDoc As IAssemblyDoc
-Set AsmDoc = swModel
+Dim swAsmDoc As IAssemblyDoc
+Set swAsmDoc = swModel
 
 Dim DOMDoc As DOMDocument60
 Set DOMDoc = New DOMDocument60
 DOMDoc.Load OpenFile
 
-Dim xmlcpNode As IXMLDOMElement
+Dim cpIDReplacement As Object
+Set cpIDReplacement = CreateObject("Scripting.Dictionary")
+
+
+Dim cpNode As IXMLDOMElement
     
-For Each xmlcpNode In DOMDoc.selectNodes("/assembly/components/component")
-    Dim xmlcpId As Integer
-    Dim xmlcpPath As String
-    Dim xmlcpType As Integer
-    Dim xmlcpConfiguration As String
-    Dim xmlcpSolving As Integer
-    Dim xmlcpVisible As Boolean
-    Dim xmlcpSuppression As Integer
+For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
+    Dim cpID As String
+    Dim cpPath As String
+    Dim cpType As Integer
+    Dim cpConfiguration As String
+    Dim cpSolving As Integer
+    Dim cpVisible As Boolean
+    Dim cpSuppression As Integer
     
-    xmlcpId = xmlcpNode.getAttribute("id")
-    xmlcpPath = xmlcpNode.getAttribute("path")
-    xmlcpType = xmlcpNode.selectSingleNode("type").Text
-    xmlcpConfiguration = xmlcpNode.selectSingleNode("configuration").Text
-    xmlcpSolving = xmlcpNode.selectSingleNode("solving").Text
-    xmlcpVisible = xmlcpNode.selectSingleNode("visible").Text
-    xmlcpSuppression = xmlcpNode.selectSingleNode("suppression").Text
+    cpID = cpNode.getAttribute("id")
+    cpPath = cpNode.getAttribute("path")
+    cpType = cpNode.selectSingleNode("type").Text
+    cpConfiguration = cpNode.selectSingleNode("configuration").Text
+    cpSolving = cpNode.selectSingleNode("solving").Text
+    cpVisible = cpNode.selectSingleNode("visible").Text
+    cpSuppression = cpNode.selectSingleNode("suppression").Text
     
-    Dim component As IComponent2
-    Set component = AsmDoc.AddComponent5(xmlcpPath, swAddComponentConfigOptions_CurrentSelectedConfig, "", True, xmlcpConfiguration, 0, 0, 0)
+    Dim swComponent As IComponent2
+    Set swComponent = swAsmDoc.AddComponent5(cpPath, swAddComponentConfigOptions_CurrentSelectedConfig, "", True, cpConfiguration, 0, 0, 0)
     
-    swModel.Extension.SelectByID2 component.GetSelectByIDString(), "COMPONENT", 0, 0, 0, False, 0, Nothing, 0
-    AsmDoc.CompConfigProperties6 xmlcpSuppression, xmlcpSolving, xmlcpVisible, False, "", False, False, False
+    cpIDReplacement.Add cpID, swComponent.GetID()
+    cpID = swComponent.GetID()
     
-    ApplyComponentProps xmlcpNode, component, swMath
+    swModel.Extension.SelectByID2 swComponent.GetSelectByIDString(), "COMPONENT", 0, 0, 0, False, 0, Nothing, 0
+    swAsmDoc.CompConfigProperties6 cpSuppression, cpSolving, cpVisible, False, "", False, False, False
+    
+    ApplyComponentProps cpNode, swComponent, swMath, cpIDReplacement, cpID
     
 Next
+
+
+Dim mtNode As IXMLDOMElement
+For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
+    Dim mtType As Integer
+    Dim mtAlignment As Integer
+    
+    mtType = mtNode.selectSingleNode("type").Text
+    mtAlignment = mtNode.selectSingleNode("alignment").Text
+    
+    swModel.ClearSelection2 True
+    
+    Dim mtEntNode As IXMLDOMElement
+    For Each mtEntNode In mtNode.selectNodes("entity")
+        Dim mtRefCpID As Variant
+        Dim mtRefCpIDPart As String
+        mtRefCpIDPart = ""
+        Dim mtEntType As Integer
+        Dim j As Integer
+        
+        mtRefCpID = Split(mtEntNode.getAttribute("component-id"), "/")
+        For j = 0 To UBound(mtRefCpID)
+            Dim replacedID As String
+            replacedID = mtRefCpID(j)
+            
+            If j > 0 Then mtRefCpIDPart = mtRefCpIDPart & "/"
+            If cpIDReplacement.Exists(mtRefCpIDPart & replacedID) Then replacedID = cpIDReplacement(mtRefCpIDPart & replacedID)
+            
+            mtRefCpIDPart = mtRefCpIDPart & replacedID
+        Next
+        mtRefCpID = Split(mtRefCpIDPart, "/")
+        
+        mtEntType = mtEntNode.selectSingleNode("type").Text
+        
+        Set mtParamNodes = mtEntNode.selectNodes("params/value")
+        
+        Dim mtParam(7) As Double
+        For j = 0 To 7
+            mtParam(j) = mtParamNodes(j).Text
+        Next
+
+        Dim swEntCp As IComponent2
+        Set swEntCp = swAsmDoc.GetComponentByID(mtRefCpID(0))
+        For j = 1 To UBound(mtRefCpID)
+            Set swEntCp = swEntCp.GetModelDoc2().GetComponentByID(mtRefCpID(j))
+        Next
+        
+        Dim swEntModel As IModelDoc2
+        Set swEntModel = swEntCp.GetModelDoc2()
+        
+        Dim SelectState As Boolean
+        SelectState = swEntModel.Extension.SelectByID2("", GetSelTypeString(mtEntType), mtParam(0), mtParam(1), mtParam(2), True, 1, Nothing, 0)
+        If Not SelectState Then MsgBox "selectbyid2 failed"
+    Next
+    
+    Dim mtData As IMateFeatureData
+    Set mtData = swAsmDoc.CreateMateData(mtType)
+    If mtType = swMateCOINCIDENT Then
+        Dim mtDataCasted As ICoincidentMateFeatureData
+        Set mtDataCasted = mtData
+        
+        mtDataCasted.MateAlignment = mtAlignment
+    End If
+    swAsmDoc.CreateMate mtDataCasted
+Next
+
 End Sub
 
-Sub ApplyComponentProps(xmlcpNode As IXMLDOMElement, component As IComponent2, swMath As IMathUtility)
+Sub ApplyComponentProps(cpNode As IXMLDOMElement, swComponent As IComponent2, swMath As IMathUtility, cpIDReplacement As Object, cpID As String)
 
+Dim cpTransformNodes As IXMLDOMNodeList
+Dim cpChildren As IXMLDOMNodeList
 
-Dim xmlcpTransformNodes As IXMLDOMNodeList
-Dim xmlcpChildren As IXMLDOMNodeList
-
-Set xmlcpTransformNodes = xmlcpNode.selectNodes("transform/value")
-Set xmlcpChildren = xmlcpNode.selectNodes("components/component")
+Set cpTransformNodes = cpNode.selectNodes("transform/value")
+Set cpChildren = cpNode.selectNodes("components/component")
 
 Dim TransformArray(15) As Double
 Dim j As Integer
 For j = 0 To 12
-    TransformArray(j) = xmlcpTransformNodes(j).Text
+    TransformArray(j) = cpTransformNodes(j).Text
 Next
-component.Transform2 = swMath.CreateTransform(TransformArray)
+swComponent.Transform2 = swMath.CreateTransform(TransformArray)
 
-Dim cpChild As IComponent2
-Dim cpChildren As Variant
-cpChildren = component.GetChildren()
+Dim swChild As IComponent2
+Dim swChildren As Variant
+swChildren = swComponent.GetChildren()
 Dim i As Integer
-For i = LBound(cpChildren) To UBound(cpChildren)
-    Set cpChild = cpChildren(i)
-    Dim xmlcpElement As IXMLDOMElement
-    For Each xmlcpElement In xmlcpChildren
-        If xmlcpElement.getAttribute("id") = cpChild.GetID() Then
-            ApplyComponentProps xmlcpElement, cpChild, swMath
+For i = LBound(swChildren) To UBound(swChildren)
+    Set swChild = swChildren(i)
+    Dim cpElement As IXMLDOMElement
+    For Each cpElement In cpChildren
+        If cpElement.getAttribute("id") = swChild.GetID() Then
+            ApplyComponentProps cpElement, swChild, swMath, cpIDReplacement, cpID
             Exit For
         End If
     Next
 Next
     
 End Sub
+
+Function GetSelTypeString(SelType As Integer) As String
+If SelType = swSelEDGES Then
+    GetSelTypeString = "EDGE"
+ElseIf SelType = swSelFACES Then
+    GetSelTypeString = "FACE"
+ElseIf SelType = swSelVERTICES Then
+    GetSelTypeString = "VERTEX"
+ElseIf SelType = swSelDATUMPLANES Then
+    GetSelTypeString = "PLANE"
+Else
+    MsgBox "unsupported type: " & SelType
+End If
+End Function
+
