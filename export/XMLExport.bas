@@ -209,7 +209,7 @@ For Each SingleMate In swMates
                 Next
                 vPt = nPt
                 Set mtEntPt = swMath.CreatePoint((vPt))
-                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2)
+                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2.Inverse())
                 For j = 0 To 2
                     mtParam(j) = mtEntPt.ArrayData(j)
                 Next
@@ -220,7 +220,7 @@ For Each SingleMate In swMates
                 Next
                 vPt = nPt
                 Set mtEntVec = swMath.CreateVector((vPt))
-                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2)
+                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2.Inverse())
                 For j = 0 To 2
                     mtParam(j + 3) = mtEntVec.ArrayData(j)
                 Next

@@ -17,6 +17,40 @@ Select Case SelType
 End Select
 End Sub
 
+Sub HideEntityComponent(mtEntNode As IXMLDOMElement, swAsmDoc As IAssemblyDoc)
+
+Dim SelectState As Boolean
+SelectState = False
+Dim SelectName As String
+Dim ComponentName As String
+ComponentName = XMLImport.cpNameReplace(mtEntNode.getAttribute("component"))
+
+Dim swSelMgr As ISelectionMgr
+Set swSelMgr = swAsmDoc.SelectionManager
+Dim swSelectData As ISelectData
+Set swSelectData = swSelMgr.CreateSelectData()
+swSelectData.Mark = 1
+
+Dim swRefCp As IComponent2
+SelectName = ComponentName
+SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+Debug.Print SelectName
+Debug.Print SelectState
+If Not SelectState Then Exit Sub
+
+Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
+'2回Selectで選択解除
+SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+
+
+Dim swRefCp_p As IComponent2
+Set swRefCp_p = swRefCp
+Do Until swRefCp_p Is Nothing
+    swRefCp_p.SetVisibility swComponentHidden, swThisConfiguration, ""
+    Set swRefCp_p = swRefCp_p.GetParent()
+Loop
+End Sub
+
 Sub SelectEntity(mtEntNode As IXMLDOMElement, swAsmDoc As IAssemblyDoc, swMath As IMathUtility)
 Dim mtEntType As Integer
 mtEntType = mtEntNode.selectSingleNode("type").Text
@@ -32,7 +66,26 @@ Set swSelMgr = swAsmDoc.SelectionManager
 Dim swSelectData As ISelectData
 Set swSelectData = swSelMgr.CreateSelectData()
 swSelectData.Mark = 1
-    
+
+
+Dim swRefCp As IComponent2
+SelectName = ComponentName
+SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+Debug.Print SelectName
+Debug.Print SelectState
+If Not SelectState Then Exit Sub
+
+Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
+'2回Selectで選択解除
+SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+
+Dim swRefCp_p As IComponent2
+Set swRefCp_p = swRefCp
+Do Until swRefCp_p Is Nothing
+    swRefCp_p.SetVisibility swComponentVisible, swThisConfiguration, ""
+    Set swRefCp_p = swRefCp_p.GetParent()
+Loop
+
 Select Case mtEntType
     Case swSelEDGES, swSelFACES, swSelVERTICES
         Dim mtParamNodes As Variant
@@ -42,48 +95,80 @@ Select Case mtEntType
         For j = 0 To 7
             mtParam(j) = mtParamNodes(j).Text
         Next
-        
-        Dim swRefCp As IComponent2
-        SelectName = ComponentName
-        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
-        Debug.Print SelectName
-        Debug.Print SelectState
-        If SelectState Then
-            Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
-            '2回Selectで選択解除
-            SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
     
-            Dim nPt(2) As Double
-            Dim vPt As Variant
-            Dim mtEntPt As IMathPoint
-            Dim mtEntVec As IMathVector
-                    
-            ' pointX, Y, Z
-            For j = 0 To 2
-                nPt(j) = mtParam(j)
-            Next
-            vPt = nPt
-            Set mtEntPt = swMath.CreatePoint((vPt))
-            If Not swRefCp.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swRefCp.Transform2.Inverse())
-            For j = 0 To 2
-                mtParam(j) = mtEntPt.ArrayData(j)
-            Next
-                    
-            ' vectorI, J ,K
-            For j = 0 To 2
-                nPt(j) = mtParam(j + 3)
-            Next
-            vPt = nPt
-            Set mtEntVec = swMath.CreateVector((vPt))
-            If Not swRefCp.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swRefCp.Transform2.Inverse())
-            For j = 0 To 2
-                mtParam(j + 3) = mtEntVec.ArrayData(j)
-            Next
-                    
-            SelectState = swAsmDoc.Extension.SelectByRay(mtParam(0), mtParam(1), mtParam(2), mtParam(3), mtParam(4), mtParam(5), mtParam(6) + 0.00001, mtEntType, True, 1, 0)
-            'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
-        End If
+        Dim nPt(2) As Double
+        Dim vPt As Variant
+        Dim mtEntPt As IMathPoint
+        Dim mtEntVec As IMathVector
+                
+        ' pointX, Y, Z
+        For j = 0 To 2
+            nPt(j) = mtParam(j)
+        Next
+        vPt = nPt
+        Set mtEntPt = swMath.CreatePoint((vPt))
+        If Not swRefCp.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swRefCp.Transform2)
+
+        ' vectorI, J ,K
+        For j = 0 To 2
+            nPt(j) = mtParam(j + 3)
+        Next
+        vPt = nPt
+        Set mtEntVec = swMath.CreateVector((vPt))
+        If Not swRefCp.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swRefCp.Transform2)
+        Set mtEntVec = mtEntVec.Scale(-1)
         
+        'Set mtEntPt = mtEntPt.AddVector(mtEntVec.Scale(-0.0001)) 'ちょっと前に位置をずらして見つけやすくする
+        
+        If mtEntType = swSelEDGES Or mtEntType = swSelVERTICES Then
+            SelectState = swAsmDoc.Extension.SelectByRay(mtEntPt.ArrayData(0), mtEntPt.ArrayData(1), mtEntPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
+            Debug.Print SelectState
+        Else
+            '0.0001だけ離れた周辺を探す
+            Dim DiffAngle As Double
+            For DiffAngle = 0 To 6.28 Step 0.3
+                ' A=(p3, p4, p5)に垂直なvector: B=(0, p5, -p4), C=AxB=(-p4p4-p5p5, p3p4, p3p5)
+                Dim mtEntVec1 As IMathVector
+                Dim mtEntVec2 As IMathVector
+                If Abs(mtEntVec.ArrayData(0)) > 0.5 Then
+                    nPt(0) = mtEntVec.ArrayData(1): nPt(1) = -mtEntVec.ArrayData(0): nPt(2) = 0
+                Else
+                    nPt(0) = 0: nPt(1) = mtEntVec.ArrayData(2): nPt(2) = -mtEntVec.ArrayData(1)
+                End If
+                vPt = nPt
+                Set mtEntVec1 = swMath.CreateVector((vPt)).Normalise()
+                Set mtEntVec2 = mtEntVec.Cross(mtEntVec1).Normalise()
+                Dim mtTargetPt As IMathPoint
+                Set mtTargetPt = mtEntPt.AddVector(mtEntVec1.Scale(0.0001 * Cos(DiffAngle))).AddVector(mtEntVec2.Scale(0.0001 * Sin(DiffAngle)))
+                SelectState = swAsmDoc.Extension.SelectByRay(mtTargetPt.ArrayData(0), mtTargetPt.ArrayData(1), mtTargetPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
+                
+                Debug.Print SelectState & " angle=" & DiffAngle
+                If SelectState Then
+                    Dim swFoundFace As IFace2
+                    Set swFoundFace = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
+                    Dim mtTargetPtInCp As IMathPoint
+                    Set mtTargetPtInCp = mtTargetPt.MultiplyTransform(swRefCp.Transform2.Inverse())
+                    Dim ClosestPtInCp As Variant
+                    Dim swClosestPtInCp As IMathPoint
+                    ClosestPtInCp = swFoundFace.GetClosestPointOn(mtTargetPtInCp.ArrayData(0), mtTargetPtInCp.ArrayData(1), mtTargetPtInCp.ArrayData(2))
+                    For j = 0 To 2
+                        nPt(j) = ClosestPtInCp(j)
+                    Next
+                    vPt = nPt
+                    Set swClosestPtInCp = swMath.CreatePoint((vPt))
+                    Debug.Print "distance: " & swClosestPtInCp.Subtract(mtTargetPtInCp).GetLength()
+                    If swClosestPtInCp.Subtract(mtTargetPtInCp).GetLength() < 0.0001 Then
+                        Exit For
+                    Else
+                        '選択解除
+                        SelectState = swAsmDoc.Extension.SelectByRay(mtTargetPt.ArrayData(0), mtTargetPt.ArrayData(1), mtTargetPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
+                    End If
+                End If
+            Next
+        End If
+        'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
+        
+
     Case swSelDATUMPLANES, swSelDATUMAXES, swSelDATUMPOINTS
         
         SelectName = mtEntNode.selectSingleNode("name").Text

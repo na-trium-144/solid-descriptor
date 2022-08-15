@@ -72,7 +72,8 @@ For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
     'swComponent.Name2 = cpName
     Debug.Print swComponent.GetSelectByIDString()
    
-    ApplyComponentProps cpNode, swComponent, swAsmDoc
+    'ApplyComponentProps cpNode, swComponent, swAsmDoc
+    HideAllComponent swComponent
     
 Next
 
@@ -113,7 +114,25 @@ For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
         mtDataCasted.MateAlignment = mtNode.selectSingleNode("alignment").Text
     End If
     swAsmDoc.CreateMate mtDataCasted
+    
+     For i = 0 To mtEntityNodes.Length - 1
+        Set mtEntNode = mtEntityNodes(i)
+        SelType.HideEntityComponent mtEntNode, swAsmDoc
+    Next
 
+Next
+
+For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
+    cpName = cpNameReplace(cpNode.getAttribute("name"))
+    
+    Dim SelectState As Boolean
+    SelectState = swAsmDoc.Extension.SelectByID2(cpName, "COMPONENT", 0, 0, 0, False, 0, Nothing, 0)
+    If SelectState Then
+        
+        Set swComponent = swSelMgr.GetSelectedObject6(1, -1)
+               
+        ApplyComponentProps cpNode, swComponent, swAsmDoc
+    End If
 Next
 
 'ê›íËÇñﬂÇ∑
@@ -163,3 +182,21 @@ For Each swChild In swChildren
 Next
     
 End Sub
+
+Sub HideAllComponent(swComponent As IComponent2)
+Dim cpChildren As IXMLDOMNodeList
+
+swComponent.SetVisibility swComponentHidden, swThisConfiguration, ""
+If swComponent.GetSuppression2() = swComponentSuppressed Then swComponent.SetSuppression2 swComponentResolved
+
+Dim swChild As Variant
+Dim swChildren As Variant
+swChildren = swComponent.GetChildren()
+For Each swChild In swChildren
+    Dim swChildCp As IComponent2
+    Set swChildCp = swChild
+    HideAllComponent swChildCp
+Next
+    
+End Sub
+
