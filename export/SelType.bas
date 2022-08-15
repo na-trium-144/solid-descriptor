@@ -12,16 +12,127 @@ Select Case SelType
         Name = swEntRef.GetSketch().Name
         ID(0) = swEntRef.GetID()(0)
         ID(1) = swEntRef.GetID()(1)
-    Case swSelCOMPONENTS
-        Name = swEntRef.Name2
-        'Do Until swEntRef.GetParent() Is Nothing
-        '    Set swEntRef = swEntRef.GetParent()
-        '    Name = Name & "@" & swEntRef.Name2
-        'Loop
     Case Else
         MsgBox "Unsupported type " & SelType
 End Select
 End Sub
+
+Sub SelectEntity(mtEntNode As IXMLDOMElement, swAsmDoc As IAssemblyDoc, swMath As IMathUtility)
+Dim mtEntType As Integer
+mtEntType = mtEntNode.selectSingleNode("type").Text
+Dim SelectState As Boolean
+SelectState = False
+Dim SelectName As String
+Dim ID As Object
+Dim ComponentName As String
+ComponentName = XMLImport.cpNameReplace(mtEntNode.getAttribute("component"))
+
+Dim swSelMgr As ISelectionMgr
+Set swSelMgr = swAsmDoc.SelectionManager
+Dim swSelectData As ISelectData
+Set swSelectData = swSelMgr.CreateSelectData()
+swSelectData.Mark = 1
+    
+Select Case mtEntType
+    Case swSelEDGES, swSelFACES, swSelVERTICES
+        Dim mtParamNodes As Variant
+        Set mtParamNodes = mtEntNode.selectNodes("params/value")
+        Dim j As Integer
+        Dim mtParam(7) As Double
+        For j = 0 To 7
+            mtParam(j) = mtParamNodes(j).Text
+        Next
+        
+        Dim swRefCp As IComponent2
+        SelectName = ComponentName
+        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+        Debug.Print SelectName
+        Debug.Print SelectState
+        If SelectState Then
+            Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
+            '2âÒSelectÇ≈ëIëâèú
+            SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+    
+            Dim nPt(2) As Double
+            Dim vPt As Variant
+            Dim mtEntPt As IMathPoint
+            Dim mtEntVec As IMathVector
+                    
+            ' pointX, Y, Z
+            For j = 0 To 2
+                nPt(j) = mtParam(j)
+            Next
+            vPt = nPt
+            Set mtEntPt = swMath.CreatePoint((vPt))
+            If Not swRefCp.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swRefCp.Transform2.Inverse())
+            For j = 0 To 2
+                mtParam(j) = mtEntPt.ArrayData(j)
+            Next
+                    
+            ' vectorI, J ,K
+            For j = 0 To 2
+                nPt(j) = mtParam(j + 3)
+            Next
+            vPt = nPt
+            Set mtEntVec = swMath.CreateVector((vPt))
+            If Not swRefCp.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swRefCp.Transform2.Inverse())
+            For j = 0 To 2
+                mtParam(j + 3) = mtEntVec.ArrayData(j)
+            Next
+                    
+            SelectState = swAsmDoc.Extension.SelectByRay(mtParam(0), mtParam(1), mtParam(2), mtParam(3), mtParam(4), mtParam(5), mtParam(6) + 0.00001, mtEntType, True, 1, 0)
+            'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
+        End If
+        
+    Case swSelDATUMPLANES, swSelDATUMAXES, swSelDATUMPOINTS
+        
+        SelectName = mtEntNode.selectSingleNode("name").Text
+        If ComponentName <> "" Then SelectName = SelectName & "@" & ComponentName
+        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, GetSelTypeString(mtEntType), 0, 0, 0, True, 1, Nothing, 0)
+        'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
+        Debug.Print SelectName
+        Debug.Print SelectState
+        
+    Case swSelSKETCHSEGS, swSelSKETCHPOINTS, swSelEXTSKETCHSEGS, swSelEXTSKETCHPOINTS
+    
+        SelectName = mtEntNode.selectSingleNode("name").Text
+        If ComponentName <> "" Then SelectName = SelectName & "@" & ComponentName
+        Set ID = mtEntNode.selectNodes("id")
+        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "SKETCH", 0, 0, 0, True, 1, Nothing, 0)
+        Debug.Print SelectName
+        Debug.Print SelectState
+        If SelectState Then
+            
+            Dim swSketch As ISketch
+            Set swSketch = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1).GetSpecificFeature2()
+            '2âÒSelectÇ≈ëIëâèú
+            SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "SKETCH", 0, 0, 0, True, 1, Nothing, 0)
+            
+            Dim swSketchEntities As Variant
+            Select Case mtEntType
+                Case swSelSKETCHSEGS, swSelEXTSKETCHSEGS
+                    swSketchEntities = swSketch.GetSketchSegments()
+                Case swSelSKETCHPOINTS, swSelEXTSKETCHPOINTS
+                    swSketchEntities = swSketch.GetSketchPoints2()
+            End Select
+
+            Dim swSketchEntitySingle As Variant
+            For Each swSketchEntitySingle In swSketchEntities
+                If CStr(swSketchEntitySingle.GetID()(0)) = ID(0).Text And CStr(swSketchEntitySingle.GetID()(1)) = ID(1).Text Then
+                    SelectState = swSketchEntitySingle.Select4(True, swSelectData)
+                    'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
+                    Exit For
+                End If
+            Next
+        End If
+        
+    Case Else
+        MsgBox "Unsupported type " & mtEntType
+End Select
+
+'If Not SelectState Then MsgBox "select failed"
+End Sub
+
 Function GetSelTypeString(SelType As Integer) As String
 Select Case SelType
 'Case    swSelNOTHING   :   GetSelTypeString =

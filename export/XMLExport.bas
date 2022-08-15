@@ -1,11 +1,11 @@
 Attribute VB_Name = "XMLExport"
 Dim swApp As Object
 
+Dim swMath As IMathUtility
+
 'アクティブなアセンブリをxmlにエクスポート
 Sub main()
 Set swApp = Application.SldWorks
-
-Dim swMath As IMathUtility
 Set swMath = swApp.GetMathUtility()
 
 Dim swModel As ModelDoc2
@@ -18,12 +18,29 @@ End If
 Dim swAsmDoc As IAssemblyDoc
 Set swAsmDoc = swModel
 
+Dim swConfMgr As IConfigurationManager
+Set swConfMgr = swModel.ConfigurationManager
+Dim swConf As IConfiguration
+Set swConf = swConfMgr.ActiveConfiguration
+Dim swRootCp As IComponent2
+Set swRootCp = swConf.GetRootComponent3(True)
+
 Dim DOMDoc As DOMDocument60
 Set DOMDoc = New DOMDocument60
 DOMDoc.appendChild DOMDoc.createProcessingInstruction("xml", "version=""1.0"" encoding=""UTF-8""")
 
+Dim cpAttr As IXMLDOMAttribute
+Dim cpSubNode As IXMLDOMNode
+
+
 Dim RootNode As IXMLDOMNode
 Set RootNode = DOMDoc.appendChild(DOMDoc.createNode(NODE_ELEMENT, "assembly", ""))
+
+Set cpAttr = RootNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "name", ""))
+cpAttr.nodeValue = swRootCp.Name2 'GetSelectByIDString()=""
+
+Set cpSubNode = RootNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "path", ""))
+cpSubNode.Text = swRootCp.GetPathName()
 
 Dim ComponentsNode As IXMLDOMNode
 Set ComponentsNode = RootNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "components", ""))
@@ -32,51 +49,24 @@ Dim MatesNode As IXMLDOMNode
 Set MatesNode = RootNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "mates", ""))
 
 Dim SingleComponent As Variant
-For Each SingleComponent In swAsmDoc.GetComponents(True)
+For Each SingleComponent In swRootCp.GetChildren()
     Dim swComponent As IComponent2
     Set swComponent = SingleComponent
 
-    Dim cpPath As String
-    cpPath = swComponent.GetPathName()
-    Dim cpExtension As String
-    cpExtension = UCase(Right(cpPath, 7))
-    
     Dim cpNode As IXMLDOMNode
     Set cpNode = ComponentsNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "component", ""))
     
-    Dim cpAttr As IXMLDOMAttribute
-    Dim cpSubNode As IXMLDOMNode
-    
     Set cpAttr = cpNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "name", ""))
-    cpAttr.nodeValue = swComponent.Name2
+    cpAttr.nodeValue = swComponent.GetSelectByIDString()
 
     Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "path", ""))
-    cpSubNode.Text = cpPath
-
-    Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
-    'cpSubNode.Text = cpModel.GetType()
-    If cpExtension = ".SLDASM" Then
-        cpSubNode.Text = swDocASSEMBLY
-    ElseIf cpExtension = ".SLDPRT" Then
-        cpSubNode.Text = swDocPART
-    Else
-        MsgBox "拡張子「" & cpExtension & "」は非対応です"
-    End If
+    cpSubNode.Text = swComponent.GetPathName()
     
     Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "configuration", ""))
     cpSubNode.Text = swComponent.ReferencedConfiguration
     
-    Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "solving", ""))
-    cpSubNode.Text = swComponent.Solving
-    
-    Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "suppression", ""))
-    cpSubNode.Text = swComponent.GetSuppression2()
-    
-    Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "visible", ""))
-    cpSubNode.Text = swComponent.Visible
-    
     ExportComponentProps DOMDoc, cpNode, swComponent
-    ExportMates swMath, swModel, DOMDoc, MatesNode, swComponent
+    ExportMates swModel, DOMDoc, MatesNode, swComponent
     
     
 Next
@@ -86,11 +76,20 @@ DOMDoc.loadXML Indent.Indent(DOMDoc.xml)
 DOMDoc.Save swModel.GetPathName() + ".xml"
 End Sub
 
-'2階層以上のコンポーネントに必要な情報は名前(Name2)と位置(Transform2)のみ
+'2階層以上のコンポーネントの出力
 Sub ExportComponentProps(DOMDoc As DOMDocument60, cpNode As IXMLDOMNode, swComponent As IComponent2)
 Dim cpAttr As IXMLDOMAttribute
 Dim cpSubNode As IXMLDOMNode
-    
+
+Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "solving", ""))
+cpSubNode.Text = swComponent.Solving
+
+Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "suppression", ""))
+cpSubNode.Text = swComponent.GetSuppression2()
+
+Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "visible", ""))
+cpSubNode.Text = swComponent.Visible
+
 Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "transform", ""))
 
 Dim j As Integer
@@ -112,7 +111,7 @@ For Each Child In swComponent.GetChildren()
     Set cpChildNode = cpSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "component", ""))
     
     Set cpAttr = cpChildNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "name", ""))
-    cpAttr.nodeValue = swChild.Name2
+    cpAttr.nodeValue = swChild.GetSelectByIDString()
     
     ExportComponentProps DOMDoc, cpChildNode, swChild
 Next
@@ -120,7 +119,7 @@ Next
 End Sub
 
 '合致情報のエクスポート
-Sub ExportMates(swMath As IMathUtility, swModel As IModelDoc2, DOMDoc As DOMDocument60, MatesNode As IXMLDOMNode, swComponent As IComponent2)
+Sub ExportMates(swModel As IModelDoc2, DOMDoc As DOMDocument60, MatesNode As IXMLDOMNode, swComponent As IComponent2)
 Dim mtAttr As IXMLDOMAttribute
 Dim mtNode As IXMLDOMNode
 Dim mtEntNode As IXMLDOMNode
@@ -143,7 +142,6 @@ For Each SingleMate In swMates
         
         Dim swMateEnt As IMateEntity2
         'Dim swMateEntRef As Object 'IMateReference
-        Dim swRefCp As IComponent2
         
         '2個のComponentから同じMateにアクセスでき、
         '片方からみるとMateEntity(0)、もう片方からはMateEntity(1)が自身に属することになるので、
@@ -170,16 +168,13 @@ For Each SingleMate In swMates
             Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
             mtSubNode.Text = swMateEnt.ReferenceType2
             
-            Set swRefCp = swMateEnt.ReferenceComponent
-            
             Dim mtEntName As String
             Dim mtEntID(2) As String
             
             ' component.Name2
             Set mtAttr = mtEntNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "component", ""))
             'mtAttr.nodeValue = swRefCp.Name2
-            SelType.ExportEntityName swSelCOMPONENTS, swRefCp, mtEntName, mtEntID
-            mtAttr.nodeValue = mtEntName
+            mtAttr.nodeValue = swMateEnt.ReferenceComponent.GetSelectByIDString()
             
             ' Entityの名前
             'mtAttr.nodeValue = swMateEntRef.Name
@@ -199,17 +194,6 @@ For Each SingleMate In swMates
             Next
             
             If mtEntName = "" Then
-                ' Rootアセンブリから見た該当ComponentのTransform
-                Dim swXForm As IMathTransform
-                Dim IdMatrix(15) As Double
-                IdMatrix(0) = 1: IdMatrix(5) = 1: IdMatrix(10) = 1: IdMatrix(15) = 1
-                Set swXForm = swMath.CreateTransform(IdMatrix)
-                Do Until swRefCp Is Nothing
-                    If Not swRefCp.Transform2 Is Nothing Then Set swXForm = swXForm.Multiply(swRefCp.Transform2)
-                    Set swRefCp = swRefCp.GetParent()
-                Loop
-                
-                
                 Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "params", ""))
                 
                 Dim nPt(2) As Double
@@ -225,7 +209,7 @@ For Each SingleMate In swMates
                 Next
                 vPt = nPt
                 Set mtEntPt = swMath.CreatePoint((vPt))
-                Set mtEntPt = mtEntPt.MultiplyTransform(swXForm)
+                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2)
                 For j = 0 To 2
                     mtParam(j) = mtEntPt.ArrayData(j)
                 Next
@@ -236,7 +220,7 @@ For Each SingleMate In swMates
                 Next
                 vPt = nPt
                 Set mtEntVec = swMath.CreateVector((vPt))
-                Set mtEntVec = mtEntVec.MultiplyTransform(swXForm)
+                If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2)
                 For j = 0 To 2
                     mtParam(j + 3) = mtEntVec.ArrayData(j)
                 Next

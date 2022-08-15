@@ -1,12 +1,30 @@
 Attribute VB_Name = "XMLImport"
 Dim swApp As Object
 
+Dim swMath As IMathUtility
+
+Dim cpNameReplaceList As Object
+
+Function cpNameReplace(cpName As String) As String
+Dim oldName As Variant
+For Each oldName In cpNameReplaceList
+    cpName = Replace(cpName, oldName, cpNameReplaceList(oldName))
+Next
+cpNameReplace = cpName
+End Function
+
 'xmlからアセンブリ生成
 Sub main()
 Set swApp = Application.SldWorks
-
-Dim swMath As IMathUtility
 Set swMath = swApp.GetMathUtility()
+
+Set cpNameReplaceList = CreateObject("Scripting.Dictionary")
+
+'名前の変更を有効にする
+Dim ExtRefUpdateCompNamesDefault As Boolean
+ExtRefUpdateCompNamesDefault = swApp.GetUserPreferenceToggle(swExtRefUpdateCompNames)
+swApp.SetUserPreferenceToggle swExtRefUpdateCompNames, False
+
 
 Dim OpenFile As Variant
 OpenFile = swApp.ActiveDoc.GetPathName() + ".xml"
@@ -20,118 +38,101 @@ Set swModel = swApp.NewDocument(swTemplate, 0, 0, 0)
 Dim swAsmDoc As IAssemblyDoc
 Set swAsmDoc = swModel
 
+Dim swSelMgr As ISelectionMgr
+Set swSelMgr = swModel.SelectionManager
+
+Dim swConfMgr As IConfigurationManager
+Set swConfMgr = swModel.ConfigurationManager
+Dim swConf As IConfiguration
+Set swConf = swConfMgr.ActiveConfiguration
+Dim swRootCp As IComponent2
+Set swRootCp = swConf.GetRootComponent3(True)
+
 Dim DOMDoc As DOMDocument60
 Set DOMDoc = New DOMDocument60
 DOMDoc.Load OpenFile
 
-Dim cpIDReplacement As Object
-Set cpIDReplacement = CreateObject("Scripting.Dictionary")
-
+Dim RootCpName As String
+RootCpName = DOMDoc.selectSingleNode("/assembly/@name").Text
 
 Dim cpNode As IXMLDOMElement
-
 For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
-    Dim cpID As String
+    Dim cpName As String
     Dim cpPath As String
-    Dim cpType As Integer
     Dim cpConfiguration As String
-    Dim cpSolving As Integer
-    Dim cpVisible As Boolean
-    Dim cpSuppression As Integer
-    
-    cpID = cpNode.getAttribute("id")
-    cpPath = cpNode.getAttribute("path")
-    cpType = cpNode.selectSingleNode("type").Text
+   
+    cpName = cpNode.getAttribute("name")
+    cpPath = cpNode.selectSingleNode("path").Text
     cpConfiguration = cpNode.selectSingleNode("configuration").Text
-    cpSolving = cpNode.selectSingleNode("solving").Text
-    cpVisible = cpNode.selectSingleNode("visible").Text
-    cpSuppression = cpNode.selectSingleNode("suppression").Text
     
     Dim swComponent As IComponent2
     Set swComponent = swAsmDoc.AddComponent5(cpPath, swAddComponentConfigOptions_CurrentSelectedConfig, "", True, cpConfiguration, 0, 0, 0)
-    
-    cpIDReplacement.Add cpID, swComponent.GetID()
-    cpID = swComponent.GetID()
-    
-    swModel.Extension.SelectByID2 swComponent.GetSelectByIDString(), "COMPONENT", 0, 0, 0, False, 0, Nothing, 0
-    swAsmDoc.CompConfigProperties6 cpSuppression, cpSolving, cpVisible, False, "", False, False, False
-    
-    ApplyComponentProps cpNode, swComponent, swMath, cpIDReplacement, cpID
+    cpNameReplaceList.Add cpName, swComponent.GetSelectByIDString()
+    swComponent.Select4 False, Nothing, False
+    'swComponent.Name2 = cpName
+    Debug.Print swComponent.GetSelectByIDString()
+   
+    ApplyComponentProps cpNode, swComponent, swAsmDoc
     
 Next
 
 
 Dim mtNode As IXMLDOMElement
 For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
-    Dim mtType As Integer
-    Dim mtAlignment As Integer
-    
-    mtType = mtNode.selectSingleNode("type").Text
-    mtAlignment = mtNode.selectSingleNode("alignment").Text
-    
     swModel.ClearSelection2 True
+
+    Dim mtEntityNodes As Object
+    Set mtEntityNodes = mtNode.selectNodes("entity")
+    Dim TargetEntities(10) As Object
     
     Dim mtEntNode As IXMLDOMElement
-    For Each mtEntNode In mtNode.selectNodes("entity")
-        Dim mtRefCpID As Variant
-        Dim mtRefCpIDPart As String
-        mtRefCpIDPart = ""
-        Dim mtEntType As Integer
-        Dim j As Integer
-        
-        mtRefCpID = Split(mtEntNode.getAttribute("component-id"), "/")
-        For j = 0 To UBound(mtRefCpID)
-            Dim replacedID As String
-            replacedID = mtRefCpID(j)
-            
-            If j > 0 Then mtRefCpIDPart = mtRefCpIDPart & "/"
-            If cpIDReplacement.Exists(mtRefCpIDPart & replacedID) Then replacedID = cpIDReplacement(mtRefCpIDPart & replacedID)
-            
-            mtRefCpIDPart = mtRefCpIDPart & replacedID
-        Next
-        mtRefCpID = Split(mtRefCpIDPart, "/")
-        
-        mtEntType = mtEntNode.selectSingleNode("type").Text
-        
-        Set mtParamNodes = mtEntNode.selectNodes("params/value")
-        
-        Dim mtParam(7) As Double
-        For j = 0 To 7
-            mtParam(j) = mtParamNodes(j).Text
-        Next
-
-        Dim swEntCp As IComponent2
-        Set swEntCp = swAsmDoc.GetComponentByID(mtRefCpID(0))
-        For j = 1 To UBound(mtRefCpID)
-            Set swEntCp = swEntCp.GetModelDoc2().GetComponentByID(mtRefCpID(j))
-        Next
-        
-        Dim swEntModel As IModelDoc2
-        Set swEntModel = swEntCp.GetModelDoc2()
-        
-        Dim SelectState As Boolean
-        'SelectState = swEntModel.Extension.SelectByID2("", SelType.GetSelTypeString(mtEntType), mtParam(0), mtParam(1), mtParam(2), True, 1, Nothing, 0)
-        SelectState = swEntModel.Extension.SelectByRay(mtParam(0), mtParam(1), mtParam(2), mtParam(3), mtParam(4), mtParam(5), 0.001, mtEntType, True, 1, 0)
-        MsgBox SelectState
+    Dim i As Integer
+    'For Each mtEntNode In mtNode.selectNodes("entity")
+    For i = 0 To mtEntityNodes.Length - 1
+        Set mtEntNode = mtEntityNodes(i)
+        SelType.SelectEntity mtEntNode, swAsmDoc, swMath
     Next
+    Debug.Print swSelMgr.GetSelectedObjectCount2(1)
+    
+            
+    
+    'For i = 0 To mtEntityNodes.Length - 1
+    '    TargetEntities(i).Select4 True, swSelectData
+    'Next
+    
+    Dim mtType As Integer
+    mtType = mtNode.selectSingleNode("type").Text
     
     Dim mtData As IMateFeatureData
     Set mtData = swAsmDoc.CreateMateData(mtType)
+    
     If mtType = swMateCOINCIDENT Then
         Dim mtDataCasted As ICoincidentMateFeatureData
         Set mtDataCasted = mtData
-        
-        mtDataCasted.MateAlignment = mtAlignment
+    
+        mtDataCasted.MateAlignment = mtNode.selectSingleNode("alignment").Text
     End If
     swAsmDoc.CreateMate mtDataCasted
+
 Next
 
+'設定を戻す
+swApp.SetUserPreferenceToggle swExtRefUpdateCompNames, ExtRefUpdateCompNamesDefault
 End Sub
 
-Sub ApplyComponentProps(cpNode As IXMLDOMElement, swComponent As IComponent2, swMath As IMathUtility, cpIDReplacement As Object, cpID As String)
-
+Sub ApplyComponentProps(cpNode As IXMLDOMElement, swComponent As IComponent2, swAsmDoc As IAssemblyDoc)
+Dim cpSolving As Integer
+Dim cpVisible As Boolean
+Dim cpSuppression As Integer
 Dim cpTransformNodes As IXMLDOMNodeList
 Dim cpChildren As IXMLDOMNodeList
+
+cpSolving = cpNode.selectSingleNode("solving").Text
+cpVisible = cpNode.selectSingleNode("visible").Text
+cpSuppression = cpNode.selectSingleNode("suppression").Text
+
+swComponent.Select4 False, Nothing, False
+swAsmDoc.CompConfigProperties6 cpSuppression, cpSolving, cpVisible, False, "", False, False, False
 
 Set cpTransformNodes = cpNode.selectNodes("transform/value")
 Set cpChildren = cpNode.selectNodes("components/component")
@@ -143,16 +144,19 @@ For j = 0 To 12
 Next
 swComponent.Transform2 = swMath.CreateTransform(TransformArray)
 
-Dim swChild As IComponent2
+Dim swChild As Variant
 Dim swChildren As Variant
 swChildren = swComponent.GetChildren()
-Dim i As Integer
-For i = LBound(swChildren) To UBound(swChildren)
-    Set swChild = swChildren(i)
+For Each swChild In swChildren
+    Dim swChildCp As IComponent2
+    Set swChildCp = swChild
     Dim cpElement As IXMLDOMElement
     For Each cpElement In cpChildren
-        If cpElement.getAttribute("id") = swChild.GetID() Then
-            ApplyComponentProps cpElement, swChild, swMath, cpIDReplacement, cpID
+        Dim cpElementName As String
+        cpElementName = cpNameReplace(cpElement.getAttribute("name"))
+        If cpElementName = swChildCp.GetSelectByIDString() Then
+            Debug.Print swComponent.GetSelectByIDString()
+            ApplyComponentProps cpElement, swChildCp, swAsmDoc
             Exit For
         End If
     Next
