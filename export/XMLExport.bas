@@ -199,35 +199,53 @@ For Each SingleMate In swMates
                 Dim nPt(2) As Double
                 Dim vPt As Variant
                 Dim mtEntPt As IMathPoint
+                Dim ClosestPt As Variant
+                Dim swClosestPt As IMathPoint
                 Dim mtEntVec As IMathVector
                 Dim mtParam(7) As Double
                 Dim j As Integer
                 
+                For j = 0 To 7
+                    mtParam(j) = swMateEnt.EntityParams(j)
+                Next
+                
                 ' pointX, Y, Z
                 For j = 0 To 2
-                    nPt(j) = swMateEnt.EntityParams(j)
+                    nPt(j) = mtParam(j)
                 Next
                 vPt = nPt
                 Set mtEntPt = swMath.CreatePoint((vPt))
                 If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2.Inverse())
+
+                If Not swMateEnt.Reference Is Nothing Then
+                    If swMateEnt.ReferenceType2 = swSelEDGES Or swMateEnt.ReferenceType2 = swSelFACES Then
+                        'EntityParams‚Ì“_‚ª–Êã‚É‚È‚¢‚±‚Æ‚ª‚ ‚èA‚»‚Ìê‡‚Í–Êã‚Åˆê”Ô‹ß‚¢“_‚É‚·‚é
+                        ClosestPt = swMateEnt.Reference.GetClosestPointOn(mtEntPt.ArrayData(0), mtEntPt.ArrayData(1), mtEntPt.ArrayData(2))
+                        For j = 0 To 2
+                            nPt(j) = ClosestPt(j)
+                        Next
+                        vPt = nPt
+                        Set swClosestPt = swMath.CreatePoint((vPt))
+                        If swClosestPt.Subtract(mtEntPt).GetLength() > mtParam(6) + 0.00001 Then Set mtEntPt = swClosestPt
+                    ElseIf swMateEnt.ReferenceType2 = swSelVERTICES Then
+                        mtEntPt = swMateEnt.Reference.GetPoint()
+                    End If
+                End If
+                
+                
                 For j = 0 To 2
                     mtParam(j) = mtEntPt.ArrayData(j)
                 Next
                 
                 ' vectorI, J ,K
                 For j = 0 To 2
-                    nPt(j) = swMateEnt.EntityParams(j + 3)
+                    nPt(j) = mtParam(j + 3)
                 Next
                 vPt = nPt
                 Set mtEntVec = swMath.CreateVector((vPt))
                 If Not swMateEnt.ReferenceComponent.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swMateEnt.ReferenceComponent.Transform2.Inverse())
                 For j = 0 To 2
                     mtParam(j + 3) = mtEntVec.ArrayData(j)
-                Next
-                
-                ' radius1, 2
-                For j = 6 To 7
-                    mtParam(j) = swMateEnt.EntityParams(j)
                 Next
                 
                 For j = 0 To 7

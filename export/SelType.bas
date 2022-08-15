@@ -120,52 +120,9 @@ Select Case mtEntType
         
         'Set mtEntPt = mtEntPt.AddVector(mtEntVec.Scale(-0.0001)) '‚¿‚å‚Á‚Æ‘O‚ÉˆÊ’u‚ð‚¸‚ç‚µ‚ÄŒ©‚Â‚¯‚â‚·‚­‚·‚é
         
-        If mtEntType = swSelEDGES Or mtEntType = swSelVERTICES Then
-            SelectState = swAsmDoc.Extension.SelectByRay(mtEntPt.ArrayData(0), mtEntPt.ArrayData(1), mtEntPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
-            Debug.Print SelectState
-        Else
-            '0.0001‚¾‚¯—£‚ê‚½Žü•Ó‚ð’T‚·
-            Dim DiffAngle As Double
-            For DiffAngle = 0 To 6.28 Step 0.3
-                ' A=(p3, p4, p5)‚É‚’¼‚Èvector: B=(0, p5, -p4), C=AxB=(-p4p4-p5p5, p3p4, p3p5)
-                Dim mtEntVec1 As IMathVector
-                Dim mtEntVec2 As IMathVector
-                If Abs(mtEntVec.ArrayData(0)) > 0.5 Then
-                    nPt(0) = mtEntVec.ArrayData(1): nPt(1) = -mtEntVec.ArrayData(0): nPt(2) = 0
-                Else
-                    nPt(0) = 0: nPt(1) = mtEntVec.ArrayData(2): nPt(2) = -mtEntVec.ArrayData(1)
-                End If
-                vPt = nPt
-                Set mtEntVec1 = swMath.CreateVector((vPt)).Normalise()
-                Set mtEntVec2 = mtEntVec.Cross(mtEntVec1).Normalise()
-                Dim mtTargetPt As IMathPoint
-                Set mtTargetPt = mtEntPt.AddVector(mtEntVec1.Scale(0.0001 * Cos(DiffAngle))).AddVector(mtEntVec2.Scale(0.0001 * Sin(DiffAngle)))
-                SelectState = swAsmDoc.Extension.SelectByRay(mtTargetPt.ArrayData(0), mtTargetPt.ArrayData(1), mtTargetPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
-                
-                Debug.Print SelectState & " angle=" & DiffAngle
-                If SelectState Then
-                    Dim swFoundFace As IFace2
-                    Set swFoundFace = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
-                    Dim mtTargetPtInCp As IMathPoint
-                    Set mtTargetPtInCp = mtTargetPt.MultiplyTransform(swRefCp.Transform2.Inverse())
-                    Dim ClosestPtInCp As Variant
-                    Dim swClosestPtInCp As IMathPoint
-                    ClosestPtInCp = swFoundFace.GetClosestPointOn(mtTargetPtInCp.ArrayData(0), mtTargetPtInCp.ArrayData(1), mtTargetPtInCp.ArrayData(2))
-                    For j = 0 To 2
-                        nPt(j) = ClosestPtInCp(j)
-                    Next
-                    vPt = nPt
-                    Set swClosestPtInCp = swMath.CreatePoint((vPt))
-                    Debug.Print "distance: " & swClosestPtInCp.Subtract(mtTargetPtInCp).GetLength()
-                    If swClosestPtInCp.Subtract(mtTargetPtInCp).GetLength() < 0.0001 Then
-                        Exit For
-                    Else
-                        '‘I‘ð‰ðœ
-                        SelectState = swAsmDoc.Extension.SelectByRay(mtTargetPt.ArrayData(0), mtTargetPt.ArrayData(1), mtTargetPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), 0, mtEntType, True, 1, 0)
-                    End If
-                End If
-            Next
-        End If
+        SelectState = swAsmDoc.Extension.SelectByRay(mtEntPt.ArrayData(0), mtEntPt.ArrayData(1), mtEntPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), mtParam(6) + 0.00001, mtEntType, True, 1, 0)
+        Debug.Print SelectState
+        
         'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
         
 
