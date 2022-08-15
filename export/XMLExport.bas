@@ -142,7 +142,7 @@ For Each SingleMate In swMates
         Set swMate = SingleMate
         
         Dim swMateEnt As IMateEntity2
-        Dim swMateEntRef As Object 'IMateReference
+        'Dim swMateEntRef As Object 'IMateReference
         Dim swRefCp As IComponent2
         
         '2個のComponentから同じMateにアクセスでき、
@@ -163,74 +163,95 @@ For Each SingleMate In swMates
         Dim e As Integer
         For e = 0 To swMate.GetMateEntityCount() - 1
             Set swMateEnt = swMate.MateEntity(e)
-            Set swMateEntRef = swMateEnt.Reference
+            'Set swMateEntRef = swMateEnt.Reference 'APIHelpの記述と違って選択したEntityなどが返る
             
             Set mtEntNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "entity", ""))
             
             Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
             mtSubNode.Text = swMateEnt.ReferenceType2
             
-            ' Entityの名前
-            Set mtAttr = mtEntNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "name", ""))
-            mtAttr.nodeValue = swMateEntRef.Name
-            
-            
             Set swRefCp = swMateEnt.ReferenceComponent
+            
+            Dim mtEntName As String
+            Dim mtEntID(2) As String
             
             ' component.Name2
             Set mtAttr = mtEntNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "component", ""))
-            mtAttr.nodeValue = swRefCp.Name2
+            'mtAttr.nodeValue = swRefCp.Name2
+            SelType.ExportEntityName swSelCOMPONENTS, swRefCp, mtEntName, mtEntID
+            mtAttr.nodeValue = mtEntName
             
-            ' Rootアセンブリから見た該当ComponentのTransform
-            Dim swXForm As IMathTransform
-            Set swXForm = swRefCp.Transform2
-            Do Until swRefCp.GetParent() Is Nothing
-                Set swRefCp = swRefCp.GetParent()
-                If Not swRefCp.Transform2 Is Nothing Then Set swXForm = swXForm.Multiply(swRefCp.Transform2)
-            Loop
+            ' Entityの名前
+            'mtAttr.nodeValue = swMateEntRef.Name
+            SelType.ExportEntityName swMateEnt.ReferenceType2, swMateEnt.Reference, mtEntName, mtEntID
             
+            If mtEntName <> "" Then
+                Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "name", ""))
+                mtSubNode.Text = mtEntName
+            End If
             
-            Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "params", ""))
-            
-            Dim nPt(2) As Double
-            Dim vPt As Variant
-            Dim mtEntPt As IMathPoint
-            Dim mtEntVec As IMathVector
-            Dim mtParam(7) As Double
-            Dim j As Integer
-            
-            ' pointX, Y, Z
-            For j = 0 To 2
-                nPt(j) = swMateEnt.EntityParams(j)
-            Next
-            vPt = nPt
-            Set mtEntPt = swMath.CreatePoint((vPt))
-            Set mtEntPt = mtEntPt.MultiplyTransform(swXForm)
-            For j = 0 To 2
-                mtParam(j) = mtEntPt.ArrayData(j)
+            Dim mtEntIDSingle As Variant
+            For Each mtEntIDSingle In mtEntID
+                If mtEntIDSingle <> "" Then
+                    Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "id", ""))
+                    mtSubNode.Text = mtEntIDSingle
+                End If
             Next
             
-            ' vectorI, J ,K
-            For j = 0 To 2
-                nPt(j) = swMateEnt.EntityParams(j + 3)
-            Next
-            vPt = nPt
-            Set mtEntVec = swMath.CreateVector((vPt))
-            Set mtEntVec = mtEntVec.MultiplyTransform(swXForm)
-            For j = 0 To 2
-                mtParam(j + 3) = mtEntVec.ArrayData(j)
-            Next
-            
-            ' radius1, 2
-            For j = 6 To 7
-                mtParam(j) = swMateEnt.EntityParams(j)
-            Next
-            
-            For j = 0 To 7
-                Dim mtParamValueNode As IXMLDOMNode
-                Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
-                mtParamValueNode.Text = mtParam(j)
-            Next
+            If mtEntName = "" Then
+                ' Rootアセンブリから見た該当ComponentのTransform
+                Dim swXForm As IMathTransform
+                Dim IdMatrix(15) As Double
+                IdMatrix(0) = 1: IdMatrix(5) = 1: IdMatrix(10) = 1: IdMatrix(15) = 1
+                Set swXForm = swMath.CreateTransform(IdMatrix)
+                Do Until swRefCp Is Nothing
+                    If Not swRefCp.Transform2 Is Nothing Then Set swXForm = swXForm.Multiply(swRefCp.Transform2)
+                    Set swRefCp = swRefCp.GetParent()
+                Loop
+                
+                
+                Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "params", ""))
+                
+                Dim nPt(2) As Double
+                Dim vPt As Variant
+                Dim mtEntPt As IMathPoint
+                Dim mtEntVec As IMathVector
+                Dim mtParam(7) As Double
+                Dim j As Integer
+                
+                ' pointX, Y, Z
+                For j = 0 To 2
+                    nPt(j) = swMateEnt.EntityParams(j)
+                Next
+                vPt = nPt
+                Set mtEntPt = swMath.CreatePoint((vPt))
+                Set mtEntPt = mtEntPt.MultiplyTransform(swXForm)
+                For j = 0 To 2
+                    mtParam(j) = mtEntPt.ArrayData(j)
+                Next
+                
+                ' vectorI, J ,K
+                For j = 0 To 2
+                    nPt(j) = swMateEnt.EntityParams(j + 3)
+                Next
+                vPt = nPt
+                Set mtEntVec = swMath.CreateVector((vPt))
+                Set mtEntVec = mtEntVec.MultiplyTransform(swXForm)
+                For j = 0 To 2
+                    mtParam(j + 3) = mtEntVec.ArrayData(j)
+                Next
+                
+                ' radius1, 2
+                For j = 6 To 7
+                    mtParam(j) = swMateEnt.EntityParams(j)
+                Next
+                
+                For j = 0 To 7
+                    Dim mtParamValueNode As IXMLDOMNode
+                    Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                    mtParamValueNode.Text = mtParam(j)
+                Next
+            End If
             
         Next
         
