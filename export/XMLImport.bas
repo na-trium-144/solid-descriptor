@@ -73,7 +73,7 @@ For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
     Debug.Print swComponent.GetSelectByIDString()
    
     'ApplyComponentProps cpNode, swComponent, swAsmDoc
-    HideAllComponent swComponent
+    'HideAllComponent swComponent
     
 Next
 
@@ -84,7 +84,6 @@ For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
 
     Dim mtEntityNodes As Object
     Set mtEntityNodes = mtNode.selectNodes("entity")
-    Dim TargetEntities(10) As Object
     
     Dim mtEntNode As IXMLDOMElement
     Dim i As Integer
@@ -115,11 +114,29 @@ For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
     End If
     swAsmDoc.CreateMate mtDataCasted
     
-    For i = 0 To mtEntityNodes.Length - 1
-        Set mtEntNode = mtEntityNodes(i)
-        SelType.HideEntityComponent mtEntNode, swAsmDoc
-    Next
+    'For i = 0 To mtEntityNodes.Length - 1
+    '    Set mtEntNode = mtEntityNodes(i)
+    '    SelType.HideEntityComponent mtEntNode, swAsmDoc
+    'Next
 
+Next
+
+Dim swChild As Variant
+Dim swChildren As Variant
+swChildren = swRootCp.GetChildren()
+For Each swChild In swChildren
+    Dim swChildCp As IComponent2
+    Set swChildCp = swChild
+    Dim cpElement As IXMLDOMElement
+    For Each cpElement In DOMDoc.selectNodes("/assembly/components/component")
+        Dim cpElementName As String
+        cpElementName = cpNameReplace(cpElement.getAttribute("name"))
+        If cpElementName = swChildCp.GetSelectByIDString() Then
+            Debug.Print swComponent.GetSelectByIDString()
+            ApplyComponentProps cpElement, swChildCp, swAsmDoc
+            Exit For
+        End If
+    Next
 Next
 
 'ê›íËÇñﬂÇ∑
