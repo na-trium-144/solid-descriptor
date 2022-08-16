@@ -228,7 +228,7 @@ For Each SingleMate In swMates
                         Set swClosestPt = swMath.CreatePoint((vPt))
                         If swClosestPt.Subtract(mtEntPt).GetLength() > mtParam(6) + 0.00001 Then Set mtEntPt = swClosestPt
                     ElseIf swMateEnt.ReferenceType2 = swSelVERTICES Then
-                        mtEntPt = swMateEnt.Reference.GetPoint()
+                        Set mtEntPt = swMateEnt.Reference.GetPoint()
                     End If
                 End If
                 
@@ -253,6 +253,54 @@ For Each SingleMate In swMates
                     Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
                     mtParamValueNode.Text = mtParam(j)
                 Next
+                
+                
+                If Not swMateEnt.Reference Is Nothing Then
+                    '属するBodyの中心を出力
+                    Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "body", ""))
+                    Dim mtEntBodyParams As Variant
+                    If swMateEnt.ReferenceType2 = swSelEDGES Or swMateEnt.ReferenceType2 = swSelFACES Then
+                        mtEntBodyParams = swMateEnt.Reference.GetBody().GetMassProperties(1)
+                    ElseIf swMateEnt.ReferenceType2 = swSelVERTICES Then
+                        mtEntBodyParams = swMateEnt.Reference.GetEdges()(0).GetBody().GetMassProperties(1)
+                    End If
+                    For j = 0 To 2
+                        Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                        mtParamValueNode.Text = mtEntBodyParams(j)
+                    Next
+                    
+                    'Edgeのパラメーターを出力
+                    If swMateEnt.ReferenceType2 = swSelEDGES Then
+                        Dim mtEdgeParams As Variant
+                        mtEdgeParams = swMateEnt.Reference.GetCurve().CircleParams
+                        If Not IsNull(mtEdgeParams) Then
+                            Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "circleparams", ""))
+                            For j = 0 To 6
+                                Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                                mtParamValueNode.Text = mtEdgeParams(j)
+                            Next
+                        End If
+                        
+                        mtEdgeParams = swMateEnt.Reference.GetCurve().LineParams
+                        If Not IsNull(mtEdgeParams) Then
+                            Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "lineparams", ""))
+                            For j = 0 To 5
+                                Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                                mtParamValueNode.Text = mtEdgeParams(j)
+                            Next
+                        End If
+                    End If
+                    'Faceのパラメーターを出力
+                    If swMateEnt.ReferenceType2 = swSelFACES Then
+                        Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "faceparams", ""))
+                        Dim mtFaceParams As Variant
+                        mtFaceParams = swMateEnt.Reference.GetSurface().EvaluateAtPoint(ClosestPt(0), ClosestPt(1), ClosestPt(2))
+                        For j = 0 To 10
+                            Set mtParamValueNode = mtSubNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                            mtParamValueNode.Text = mtFaceParams(j)
+                        Next
+                    End If
+                End If
             End If
             
         Next

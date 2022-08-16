@@ -115,24 +115,11 @@ For Each mtNode In DOMDoc.selectNodes("/assembly/mates/mate")
     End If
     swAsmDoc.CreateMate mtDataCasted
     
-     For i = 0 To mtEntityNodes.Length - 1
+    For i = 0 To mtEntityNodes.Length - 1
         Set mtEntNode = mtEntityNodes(i)
         SelType.HideEntityComponent mtEntNode, swAsmDoc
     Next
 
-Next
-
-For Each cpNode In DOMDoc.selectNodes("/assembly/components/component")
-    cpName = cpNameReplace(cpNode.getAttribute("name"))
-    
-    Dim SelectState As Boolean
-    SelectState = swAsmDoc.Extension.SelectByID2(cpName, "COMPONENT", 0, 0, 0, False, 0, Nothing, 0)
-    If SelectState Then
-        
-        Set swComponent = swSelMgr.GetSelectedObject6(1, -1)
-               
-        ApplyComponentProps cpNode, swComponent, swAsmDoc
-    End If
 Next
 
 'ê›íËÇñﬂÇ∑

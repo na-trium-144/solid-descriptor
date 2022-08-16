@@ -31,6 +31,8 @@ Dim swSelectData As ISelectData
 Set swSelectData = swSelMgr.CreateSelectData()
 swSelectData.Mark = 1
 
+swSelMgr.SuspendSelectionList
+
 Dim swRefCp As IComponent2
 SelectName = ComponentName
 SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
@@ -39,8 +41,8 @@ Debug.Print SelectState
 If Not SelectState Then Exit Sub
 
 Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
-'2回Selectで選択解除
-SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+
+swSelMgr.ResumeSelectionList2 False
 
 
 Dim swRefCp_p As IComponent2
@@ -67,17 +69,18 @@ Dim swSelectData As ISelectData
 Set swSelectData = swSelMgr.CreateSelectData()
 swSelectData.Mark = 1
 
+swSelMgr.SuspendSelectionList
 
 Dim swRefCp As IComponent2
 SelectName = ComponentName
-SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, False, 0, Nothing, 0)
 Debug.Print SelectName
 Debug.Print SelectState
 If Not SelectState Then Exit Sub
 
-Set swRefCp = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1)
-'2回Selectで選択解除
-SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "COMPONENT", 0, 0, 0, True, 1, Nothing, 0)
+Set swRefCp = swSelMgr.GetSelectedObject6(1, -1)
+
+swSelMgr.ResumeSelectionList2 False
 
 Dim swRefCp_p As IComponent2
 Set swRefCp_p = swRefCp
@@ -88,11 +91,13 @@ Loop
 
 Select Case mtEntType
     Case swSelEDGES, swSelFACES, swSelVERTICES
+        swSelMgr.SuspendSelectionList
+        
         Dim mtParamNodes As Variant
         Set mtParamNodes = mtEntNode.selectNodes("params/value")
         Dim j As Integer
-        Dim mtParam(7) As Double
-        For j = 0 To 7
+        Dim mtParam(6) As Double
+        For j = 0 To 6
             mtParam(j) = mtParamNodes(j).Text
         Next
     
@@ -108,7 +113,10 @@ Select Case mtEntType
         vPt = nPt
         Set mtEntPt = swMath.CreatePoint((vPt))
         If Not swRefCp.Transform2 Is Nothing Then Set mtEntPt = mtEntPt.MultiplyTransform(swRefCp.Transform2)
-
+        For j = 0 To 2
+            mtParam(j) = mtEntPt.ArrayData(j)
+        Next
+        
         ' vectorI, J ,K
         For j = 0 To 2
             nPt(j) = mtParam(j + 3)
@@ -117,14 +125,96 @@ Select Case mtEntType
         Set mtEntVec = swMath.CreateVector((vPt))
         If Not swRefCp.Transform2 Is Nothing Then Set mtEntVec = mtEntVec.MultiplyTransform(swRefCp.Transform2)
         Set mtEntVec = mtEntVec.Scale(-1)
+        For j = 0 To 2
+            mtParam(j + 3) = mtEntVec.ArrayData(j)
+        Next
         
         'Set mtEntPt = mtEntPt.AddVector(mtEntVec.Scale(-0.0001)) 'ちょっと前に位置をずらして見つけやすくする
         
-        SelectState = swAsmDoc.Extension.SelectByRay(mtEntPt.ArrayData(0), mtEntPt.ArrayData(1), mtEntPt.ArrayData(2), mtEntVec.ArrayData(0), mtEntVec.ArrayData(1), mtEntVec.ArrayData(2), mtParam(6) + 0.00001, mtEntType, True, 1, 0)
+        
+        mtParam(6) = mtParam(6) + 0.00001
+        SelectState = swAsmDoc.MultiSelectByRay(mtParam, mtEntType, False)
         Debug.Print SelectState
         
         'Set GetEntity = swSelMgr.GetSelectedObject6(1, -1)
         
+        Dim swEntity As Object
+        Dim i As Integer
+        For i = 1 To swSelMgr.GetSelectedObjectCount2(-1)
+            Set swEntity = swSelMgr.GetSelectedObject6(i, -1)
+            SelectState = True
+            
+            '属するBodyの中心を確認
+            Set mtParamNodes = mtEntNode.selectNodes("body/value")
+            Dim mtEntBodyParams As Variant
+            If swMateEnt.ReferenceType2 = swSelEDGES Or swMateEnt.ReferenceType2 = swSelFACES Then
+                mtEntBodyParams = swEntity.GetBody().GetMassProperties(1)
+            ElseIf swMateEnt.ReferenceType2 = swSelVERTICES Then
+                mtEntBodyParams = swEntity.GetEdges()(0).GetBody().GetMassProperties(1)
+            End If
+            For j = 0 To 2
+                If Abs(CDbl(mtParamNodes(j).Text) - mtEntBodyParams(j)) < 0.00001 Then SelectState = False: Exit For
+            Next
+            
+            'Edgeのパラメーターを確認
+            If swMateEnt.ReferenceType2 = swSelEDGES Then
+                Dim mtEdgeParams As Variant
+                mtEdgeParams = swEntity.GetCurve().CircleParams
+                If Not IsNull(mtEdgeParams) Then
+                    Set mtParamNodes = mtEntNode.selectNodes("circleparams/value")
+                    For j = 0 To 6
+                        If Abs(CDbl(mtParamNodes(j).Text) - mtEdgeParams(j)) < 0.00001 Then SelectState = False: Exit For
+                    Next
+                End If
+                
+                mtEdgeParams = swEntity.GetCurve().LineParams
+                If Not IsNull(mtEdgeParams) Then
+                    Set mtParamNodes = mtEntNode.selectNodes("lineparams/value")
+                    For j = 0 To 5
+                        If Abs(CDbl(mtParamNodes(j).Text) - mtEdgeParams(j)) < 0.00001 Then SelectState = False: Exit For
+                    Next
+                End If
+            End If
+            
+            '部品座標に戻す
+            Set mtParamNodes = mtEntNode.selectNodes("params/value")
+            For j = 0 To 6
+                mtParam(j) = mtParamNodes(j).Text
+            Next
+            
+            'Faceのパラメーターを出力
+            If swMateEnt.ReferenceType2 = swSelFACES Then
+                Set mtParamNodes = mtEntNode.selectNodes("faceparams/value")
+                Dim mtFaceParams As Variant
+                mtFaceParams = swEntity.GetSurface().EvaluateAtPoint(mtParam(0), mtParam(1), mtParam(2))
+                If IsEmpty(mtFaceParams) Then
+                    SelectState = False
+                Else
+                    For j = 0 To 10
+                        If Abs(CDbl(mtParamNodes(j).Text) - mtFaceParams(j)) < 0.00001 Then SelectState = False: Exit For
+                    Next
+                End If
+            End If
+            
+            'Vertexの位置確認
+            If swMateEnt.ReferenceType2 = swSelVERTICES Then
+                For j = 0 To 2
+                    If Abs(CDbl(swEntity.GetPoint().ArrayData(j)) - mtParam(j)) < 0.00001 Then SelectState = False: Exit For
+                Next
+            End If
+            
+            
+            If SelectState Then
+                swSelMgr.ResumeSelectionList2 False
+                SelectState = swSelMgr.AddSelectionListObject(swEntity, swSelectData)
+                Debug.Print SelectState
+                Exit For
+            End If
+        Next
+        
+        If Not SelectState Then
+            swSelMgr.ResumeSelectionList2 False
+        End If
 
     Case swSelDATUMPLANES, swSelDATUMAXES, swSelDATUMPOINTS
         
@@ -136,19 +226,19 @@ Select Case mtEntType
         Debug.Print SelectState
         
     Case swSelSKETCHSEGS, swSelSKETCHPOINTS, swSelEXTSKETCHSEGS, swSelEXTSKETCHPOINTS
-    
+        swSelMgr.SuspendSelectionList
+        
         SelectName = mtEntNode.selectSingleNode("name").Text
         If ComponentName <> "" Then SelectName = SelectName & "@" & ComponentName
         Set ID = mtEntNode.selectNodes("id")
-        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "SKETCH", 0, 0, 0, True, 1, Nothing, 0)
+        SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "SKETCH", 0, 0, 0, False, 0, Nothing, 0)
         Debug.Print SelectName
         Debug.Print SelectState
         If SelectState Then
             
             Dim swSketch As ISketch
-            Set swSketch = swSelMgr.GetSelectedObject6(swSelMgr.GetSelectedObjectCount2(1), 1).GetSpecificFeature2()
-            '2回Selectで選択解除
-            SelectState = swAsmDoc.Extension.SelectByID2(SelectName, "SKETCH", 0, 0, 0, True, 1, Nothing, 0)
+            Set swSketch = swSelMgr.GetSelectedObject6(1, -1).GetSpecificFeature2()
+            
             
             Dim swSketchEntities As Variant
             Select Case mtEntType
@@ -157,6 +247,8 @@ Select Case mtEntType
                 Case swSelSKETCHPOINTS, swSelEXTSKETCHPOINTS
                     swSketchEntities = swSketch.GetSketchPoints2()
             End Select
+
+            swSelMgr.ResumeSelectionList2 False
 
             Dim swSketchEntitySingle As Variant
             For Each swSketchEntitySingle In swSketchEntities
