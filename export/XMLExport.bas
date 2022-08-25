@@ -80,9 +80,7 @@ For Each SingleComponent In swRootCp.GetChildren()
 
     Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "path", ""))
     cpSubNode.Text = swComponent.GetPathName()
-    
-    'ExportComponentProps DOMDoc, ComponentsNode, swComponent
-    ExportMates swModel, DOMDoc, MatesNode, swComponent
+
 Next
 
 
@@ -92,7 +90,12 @@ ExportComponentProps DOMDoc, ComponentsNode, swRootCp
 
 
 For Each ConfName In ConfNames
-    Set swConf = swModel.GetConfigurationByName(ConfName)
+    Dim swConfName As String
+    swConfName = ConfName
+
+    Set swConf = swModel.GetConfigurationByName(swConfName)
+    swModel.ShowConfiguration2 swConfName
+    
     '各コンフィギュレーションで抑制、固定、フレキシブル、参照コンフィギュレーションの情報を出力
     Set swRootCp = swConf.GetRootComponent3(True)
     
@@ -104,24 +107,25 @@ For Each ConfName In ConfNames
         Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "reference", ""))
         cpSubNode.Text = swComponent.ReferencedConfiguration
         Set cpAttr = cpSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
-        cpAttr.nodeValue = ConfName
+        cpAttr.nodeValue = swConfName
         
         Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "suppression", ""))
         cpSubNode.Text = swComponent.GetSuppression2()
         Set cpAttr = cpSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
-        cpAttr.nodeValue = ConfName
+        cpAttr.nodeValue = swConfName
         
         Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "solving", ""))
         cpSubNode.Text = swComponent.Solving
         Set cpAttr = cpSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
-        cpAttr.nodeValue = ConfName
+        cpAttr.nodeValue = swConfName
         
         If swComponent.IsFixed Then
             Set cpSubNode = cpNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "fixed", ""))
             Set cpAttr = cpSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
-            cpAttr.nodeValue = ConfName
+            cpAttr.nodeValue = swConfName
         End If
         
+        ExportMates swModel, DOMDoc, MatesNode, swComponent, swConfName
     Next
 
 Next
@@ -169,7 +173,7 @@ Next
 End Sub
 
 '合致情報のエクスポート
-Sub ExportMates(swModel As IModelDoc2, DOMDoc As DOMDocument60, MatesNode As IXMLDOMNode, swComponent As IComponent2)
+Sub ExportMates(swModel As IModelDoc2, DOMDoc As DOMDocument60, MatesNode As IXMLDOMNode, swComponent As IComponent2, ConfName As String)
 Dim mtAttr As IXMLDOMAttribute
 Dim mtNode As IXMLDOMNode
 Dim mtEntNode As IXMLDOMNode
@@ -192,27 +196,22 @@ For Each SingleMate In swMates
         
         Dim swMateEnt As IMateEntity2
         'Dim swMateEntRef As Object 'IMateReference
-        
-        '2個のComponentから同じMateにアクセスでき、
-        '片方からみるとMateEntity(0)、もう片方からはMateEntity(1)が自身に属することになるので、
-        'MateEntity(0)が自分に属する場合のみエクスポートすることにする
-        Set swMateEnt = swMate.MateEntity(0)
-        Set swRefCp = swMateEnt.ReferenceComponent
-        If swRefCp Is Nothing Then GoTo MateSkip
-        Do Until swRefCp.GetParent() Is Nothing
-            Set swRefCp = swRefCp.GetParent()
-        Loop
-        If swApp.IsSame(swRefCp, swComponent) <> swObjectSame Then GoTo MateSkip
     
         Set mtNode = DOMDoc.createNode(NODE_ELEMENT, "mate", "")
         
+        Set mtAttr = mtNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "name", ""))
+        mtAttr.nodeValue = swMate.Name
+                
         Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
         mtSubNode.Text = swMate.Type
         
+
         Dim e As Integer
         For e = 0 To swMate.GetMateEntityCount() - 1
             Set swMateEnt = swMate.MateEntity(e)
             'Set swMateEntRef = swMateEnt.Reference 'APIHelpの記述と違って選択したEntityなどが返る
+            
+            If swMateEnt.Reference Is Nothing Then GoTo MateSkip
             
             Set mtEntNode = DOMDoc.createNode(NODE_ELEMENT, "entity", "")
             
@@ -226,7 +225,23 @@ For Each SingleMate In swMates
         Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "alignment", ""))
         mtSubNode.Text = swMate.Alignment
         
+                
+        If Not MatesNode.selectSingleNode("mate[@name=""" & swMate.Name & """]") Is Nothing Then
+            Set mtNode = MatesNode.selectSingleNode("mate[@name=""" & swMate.Name & """]")
+            If mtNode.selectSingleNode("active[@configuration=""" & ConfName & """]") Is Nothing Then
+                Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "active", ""))
+                Set mtAttr = mtSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
+                mtAttr.nodeValue = ConfName
+            End If
+            GoTo MateSkip
+        End If
+
+        Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "active", ""))
+        Set mtAttr = mtSubNode.Attributes.setNamedItem(DOMDoc.createNode(NODE_ATTRIBUTE, "configuration", ""))
+        mtAttr.nodeValue = ConfName
+        
         MatesNode.appendChild mtNode
+        
     End If
     
 MateSkip:
