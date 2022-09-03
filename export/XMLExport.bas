@@ -205,27 +205,150 @@ For Each SingleMate In swMates
         Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "type", ""))
         mtSubNode.Text = swMate.Type
         
-
+        Dim swMateDef As IMateFeatureData
+        Set swMateDef = swMate.GetDefinition()
+        
+        Dim v As Variant
+        Dim i As Integer
         Dim e As Integer
-        For e = 0 To swMate.GetMateEntityCount() - 1
-            Set swMateEnt = swMate.MateEntity(e)
+        Dim ExportState As Boolean
+        
+        On Error Resume Next
+        
+        v = Nothing
+        v = swMateDef.Angle
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "angle", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.Distance
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "distance", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.FlipDimension
+        If v = True Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "flipdimension", ""))
+        End If
+        
+        v = Nothing
+        v = swMateDef.GearRatioDenominator
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "gearratiodenominator", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.GearRatioNumerator
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "gearrationumerator", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.IsAdvancedMate
+        If v = True Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "isadvancedmate", ""))
+        End If
+        
+        v = Nothing
+        v = swMateDef.LockRotation
+        If v = True Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "lockrotation", ""))
+        End If
+        
+        v = Nothing
+        v = swMateDef.MateAlignment
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "matealignment", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.MaximumAngle
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "maximumangle", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.MinimumAngle
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "minimumangle", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.MaximumDistance
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "maximumdistance", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.MinimumDistance
+        If Not IsEmpty(v) Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "minimumdistance", ""))
+            mtSubNode.Text = v
+        End If
+        
+        v = Nothing
+        v = swMateDef.Reverse
+        If v = True Then
+            Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "reverse", ""))
+        End If
+        
+        
+        v = Nothing
+        v = swMateDef.ReferenceEntity
+        If Not IsEmpty(v) Then
+            Set swMateEnt = v
+            If swMateEnt.Reference Is Nothing Then GoTo MateSkip
+            
+            Set mtEntNode = DOMDoc.createNode(NODE_ELEMENT, "referenceentity", "")
+            
+            ExportState = SelType.ExportEntity(swMateEnt, mtEntNode, DOMDoc, swMath)
+            If ExportState Then mtNode.appendChild mtEntNode
+        End If
+        
+        v = Nothing
+        v = swMateDef.PickPoints
+        If Not IsEmpty(v) Then
+
+            Dim mtPPNode As IXMLDOMNode
+            Set mtPPNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "pickpoints", ""))
+            For e = 0 To UBound(v)
+                Set mtEntNode = mtPPNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "entity", ""))
+                For i = 0 To 2
+                    Set mtSubNode = mtEntNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "value", ""))
+                    mtSubNode.Text = v(e)(i)
+                Next
+            Next
+        End If
+        
+        
+        On Error GoTo 0
+        
+        v = swMateDef.EntitiesToMate
+        
+        For e = 0 To UBound(v)
+            Set swMateEnt = v(e)
             'Set swMateEntRef = swMateEnt.Reference 'APIHelpの記述と違って選択したEntityなどが返る
             
             If swMateEnt.Reference Is Nothing Then GoTo MateSkip
             
             Set mtEntNode = DOMDoc.createNode(NODE_ELEMENT, "entity", "")
             
-            Dim ExportState As Boolean
             ExportState = SelType.ExportEntity(swMateEnt, mtEntNode, DOMDoc, swMath)
             If ExportState Then mtNode.appendChild mtEntNode
             
         Next
-        
-        ' Coincidentで使用
-        Set mtSubNode = mtNode.appendChild(DOMDoc.createNode(NODE_ELEMENT, "alignment", ""))
-        mtSubNode.Text = swMate.Alignment
-        
-                
+
+
         If Not MatesNode.selectSingleNode("mate[@name=""" & swMate.Name & """]") Is Nothing Then
             Set mtNode = MatesNode.selectSingleNode("mate[@name=""" & swMate.Name & """]")
             If mtNode.selectSingleNode("active[@configuration=""" & ConfName & """]") Is Nothing Then
